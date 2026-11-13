@@ -73,7 +73,17 @@ def batch_print(data, batch_size=2):
 
 def batch_embed(data, chunk_size=1000, batch_size=16):
     for batch in batched(chunking(data, chunk_size=chunk_size), batch_size):
-        texts = [item["chunk"] for item in batch]
+        
+        to_embed = [item for item in batch if item.get("is_embedded") is not True]
+        skipped = len(batch) - len(to_embed)
+
+        if skipped:
+            logging.info(f"Skipping {skipped} already embedded chunks")
+
+        if not to_embed:
+            continue  # nothing to do for this batch
+        
+        texts = [item["chunk"] for item in to_embed]
 
         vecs = model.encode(
             texts,
@@ -82,7 +92,7 @@ def batch_embed(data, chunk_size=1000, batch_size=16):
         )["dense_vecs"]
 
         out = []
-        for item, vec in zip(batch, vecs):
+        for item, vec in zip(to_embed, vecs):
             out.append({**item, "embedding": vec.tolist()})
 
         logging.info(f"Embedded batch of {len(out)} chunks")
@@ -106,6 +116,8 @@ def upsert_to_qdrant(client, all_chunks):
                 "index": item["index"],
                 "chunk": item["chunk"],
                 "timestamp": item.get("timestamp"),
+                "author": item.get("author"),
+                "user_id": item.get("user_id"),
             }
         )
         points.append(point)
