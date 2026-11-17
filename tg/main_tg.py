@@ -6,7 +6,7 @@ import os
 import time
 import json, tempfile, uuid
 
-from retrieve.retriever import retrieve_context, build_context
+from retrieve.retriever import retrieve_context, build_context, double_chunk, rerank_results, top_k_reranked
 import httpx
 
 load_dotenv()
@@ -136,7 +136,11 @@ async def ask_question_with_context(message):
 
     # Retrieve context
     results = retrieve_context(question, top_k=5)
-    context = build_context(results, max_chars=6000)
+    chunked_results = double_chunk(results, chunk_size=256, overlap=50)
+    reranked_results = rerank_results(question, chunked_results)
+    top_reranked = top_k_reranked(reranked_results, k=3)
+    context = build_context(top_reranked, max_chars=6000)
+
     logging.info(f"Built context for question: {len(context)} characters")
 
     # Prepare the prompt with context
